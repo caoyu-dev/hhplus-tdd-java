@@ -1,6 +1,7 @@
 package io.hhplus.tdd.point;
 
 import io.hhplus.tdd.BaseException;
+import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -8,7 +9,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.verify;
@@ -20,12 +25,15 @@ public class PointServiceTest {
     @Mock
     private UserPointTable userPointTable;
 
+    @Mock
+    private PointHistoryTable pointHistoryTable;
+
     @InjectMocks
     private PointService pointService;
 
     @BeforeEach
     void setUp() {
-        Mockito.reset(userPointTable);
+        Mockito.reset(userPointTable, pointHistoryTable);
     }
 
     @Test
@@ -152,5 +160,38 @@ public class PointServiceTest {
         assertThrows(BaseException.class, () -> {
             pointService.usePoints(userId, useAmount);
         }, "해당 유저(" + userId + ")는 존재하지 않습니다.");
+    }
+
+    @Test
+    void test_get_history_userExists() {
+        long userId = 1L;
+        List<PointHistory> historyList = new ArrayList<>();
+        historyList.add(new PointHistory(1L, userId, 100L, TransactionType.CHARGE, System.currentTimeMillis()));
+        historyList.add(new PointHistory(2L, userId, 50L, TransactionType.USE, System.currentTimeMillis()));
+
+        when(pointHistoryTable.selectAllByUserId(userId)).thenReturn(historyList);
+
+        List<PointHistory> result = pointService.getHistory(userId);
+
+        assertNotNull(result);
+        assertEquals(2, result.size());
+        assertEquals(TransactionType.CHARGE, result.get(0).type());
+        assertEquals(TransactionType.USE, result.get(1).type());
+
+        verify(pointHistoryTable).selectAllByUserId(userId);
+    }
+
+    @Test
+    void test_get_history_userHasNoHistory() {
+        long userId = 1L;
+
+        when(pointHistoryTable.selectAllByUserId(userId)).thenReturn(new ArrayList<>());
+
+        BaseException exception = assertThrows(BaseException.class, () -> {
+            pointService.getHistory(userId);
+        });
+
+        assertEquals("해당 유저(" + userId + ")의 트랜잭션 내역이 없습니다.", exception.getMessage());
+        verify(pointHistoryTable).selectAllByUserId(userId);
     }
 }

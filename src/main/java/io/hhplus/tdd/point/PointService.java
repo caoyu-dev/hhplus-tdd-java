@@ -2,19 +2,24 @@ package io.hhplus.tdd.point;
 
 import io.hhplus.tdd.BaseException;
 import io.hhplus.tdd.ErrorCode;
+import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class PointService {
 
     private final UserPointTable userPointTable;
+    private final PointHistoryTable pointHistoryTable;
     private static final Logger log = LoggerFactory.getLogger(PointService.class);
 
-    public PointService(UserPointTable userPointTable) {
+    public PointService(UserPointTable userPointTable, PointHistoryTable pointHistoryTable) {
         this.userPointTable = userPointTable;
+        this.pointHistoryTable = pointHistoryTable;
     }
 
     public UserPoint chargePoints(long id, long amount) {
@@ -25,6 +30,7 @@ public class PointService {
         long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
         UserPoint updatedUserPoint = userPointTable.insertOrUpdate(id, updatedPoints);
 
+        recordTransaction(id, amount, TransactionType.CHARGE);
         return updatedUserPoint;
     }
 
@@ -49,6 +55,7 @@ public class PointService {
         }
 
         long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
+        recordTransaction(id, amount, TransactionType.USE);
         return userPointTable.insertOrUpdate(id, updatedPointsTotal);
     }
 
@@ -58,5 +65,18 @@ public class PointService {
 
     public long calculateReducedPoints(long baseAmount, long chargeAmount) {
         return baseAmount - chargeAmount;
+    }
+
+    public List<PointHistory> getHistory(long id) {
+        List<PointHistory> history = pointHistoryTable.selectAllByUserId(id);
+        if (history.isEmpty()) {
+            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ")의 트랜잭션 내역이 없습니다.");
+        }
+        return history;
+    }
+
+    public void recordTransaction(long userId, long amount, TransactionType type) {
+        long updateMillis = System.currentTimeMillis();
+        pointHistoryTable.insert(userId, amount, type, updateMillis);
     }
 }
