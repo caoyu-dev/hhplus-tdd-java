@@ -1,11 +1,11 @@
 package io.hhplus.tdd;
 
 public record ErrorResponse(
-        String code,
+        int status,
         String message
 ) {
-    public ErrorResponse(String code, String message) {
-        this.code = code;
+    public ErrorResponse(int status, String message) {
+        this.status = status;
         this.message = message;
     }
 }

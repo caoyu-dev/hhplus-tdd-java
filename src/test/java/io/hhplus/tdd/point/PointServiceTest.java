@@ -1,6 +1,6 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.InvalidAmountException;
+import io.hhplus.tdd.BaseException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -35,7 +35,7 @@ public class PointServiceTest {
         long userId = 1L;
         long chargeAmount = 0L;
 
-        assertThrows(InvalidAmountException.class, () -> {
+        assertThrows(BaseException.class, () -> {
             pointService.chargePoints(userId, chargeAmount);
         }, "포인트는 0보다 큰 값이어야 합니다.");
     }
@@ -45,7 +45,7 @@ public class PointServiceTest {
         long userId = 1L;
         long chargeAmount = -100L;
 
-        assertThrows(InvalidAmountException.class, () -> {
+        assertThrows(BaseException.class, () -> {
             pointService.chargePoints(userId, chargeAmount);
         }, "포인트는 0보다 큰 값이어야 합니다.");
     }

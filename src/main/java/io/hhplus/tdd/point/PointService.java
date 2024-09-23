@@ -1,6 +1,7 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.InvalidAmountException;
+import io.hhplus.tdd.BaseException;
+import io.hhplus.tdd.ErrorCode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,7 +18,7 @@ public class PointService {
 
     public UserPoint chargePoints(long id, long amount) {
         if (amount <= 0) {
-            throw new InvalidAmountException("포인트는 0보다 큰 값이어야 합니다.");
+            throw new BaseException(ErrorCode.ADD_UNDER_VALUE_FAILED);
         }
         UserPoint findUserPoint = pointRepository.findById(id)
                 .orElse(UserPoint.empty(id));
