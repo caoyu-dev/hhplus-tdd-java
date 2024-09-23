@@ -1,6 +1,7 @@
 package io.hhplus.tdd.point;
 
 import io.hhplus.tdd.BaseException;
+import io.hhplus.tdd.database.UserPointTable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -9,10 +10,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Optional;
-
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,14 +18,14 @@ import static org.mockito.Mockito.when;
 public class PointServiceTest {
 
     @Mock
-    private PointRepository pointRepository;
+    private UserPointTable userPointTable;
 
     @InjectMocks
     private PointService pointService;
 
     @BeforeEach
     void setUp() {
-        Mockito.reset(pointRepository);
+        Mockito.reset(userPointTable);
     }
 
     @Test
@@ -66,25 +64,26 @@ public class PointServiceTest {
         UserPoint existingUserPoint = new UserPoint(userId, initialPoints, System.currentTimeMillis());
         UserPoint updatedUserPoint = new UserPoint(userId, initialPoints + chargeAmount, System.currentTimeMillis());
 
-        when(pointRepository.findById(userId)).thenReturn(Optional.of(existingUserPoint));
-        when(pointRepository.save(any(UserPoint.class))).thenReturn(updatedUserPoint);
+        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
+        when(userPointTable.insertOrUpdate(userId, initialPoints + chargeAmount)).thenReturn(updatedUserPoint);
         UserPoint result = pointService.chargePoints(userId, chargeAmount);
 
         assertEquals(initialPoints + chargeAmount, result.point());
-        verify(pointRepository).save(any(UserPoint.class));
+        verify(userPointTable).insertOrUpdate(userId, initialPoints + chargeAmount);
     }
 
     @Test
     void test_charge_points_userDoesNotExist() {
         long userId = 2L;
         long chargeAmount = 100L;
+        UserPoint newPoint = new UserPoint(userId, chargeAmount, System.currentTimeMillis());
 
-        when(pointRepository.findById(userId)).thenReturn(Optional.empty());
-        when(pointRepository.save(any(UserPoint.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        when(userPointTable.selectById(userId)).thenReturn(UserPoint.empty(userId));
+        when(userPointTable.insertOrUpdate(userId, chargeAmount)).thenReturn(newPoint);
 
         UserPoint result = pointService.chargePoints(userId, chargeAmount);
 
         assertEquals(chargeAmount, result.point());
-        verify(pointRepository).save(any(UserPoint.class));
+        verify(userPointTable).insertOrUpdate(userId, chargeAmount);
     }
 }
