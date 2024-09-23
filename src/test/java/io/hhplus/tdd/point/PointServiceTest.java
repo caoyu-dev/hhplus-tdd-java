@@ -86,4 +86,28 @@ public class PointServiceTest {
         assertEquals(chargeAmount, result.point());
         verify(userPointTable).insertOrUpdate(userId, chargeAmount);
     }
+
+    @Test
+    void test_get_point_userExists() {
+        long userId = 1L;
+        UserPoint existingUserPoint = new UserPoint(userId, 100L, System.currentTimeMillis());
+
+        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
+        UserPoint result = pointService.getPoint(userId);
+
+        assertNotNull(result);
+        assertEquals(100L, result.point());
+        verify(userPointTable).selectById(userId);
+    }
+
+    @Test
+    void test_get_point_userNotFound() {
+        long userId = 999L;
+
+        when(userPointTable.selectById(userId)).thenReturn(null);
+
+        assertThrows(BaseException.class, () -> {
+            pointService.getPoint(userId);
+        }, "해당 유저(" + userId + ")는 존재하지 않습니다.");
+    }
 }

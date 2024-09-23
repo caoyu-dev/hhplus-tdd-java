@@ -31,4 +31,12 @@ public class PointService {
     public long updatePoints(long baseAmount,long chargeAmount) {
         return baseAmount + chargeAmount;
     }
+
+    public UserPoint getPoint(long id) {
+        UserPoint userPoint = userPointTable.selectById(id);
+        if (userPoint == null) {
+            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ") 는 존재하지 않습니다.");
+        }
+        return userPoint;
+    }
 }
