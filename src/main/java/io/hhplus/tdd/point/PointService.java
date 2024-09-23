@@ -21,22 +21,42 @@ public class PointService {
         if (amount <= 0) {
             throw new BaseException(ErrorCode.ADD_UNDER_VALUE_FAILED);
         }
-        UserPoint findUserPoint = userPointTable.selectById(id);
-        long updatedPoints = updatePoints(findUserPoint.point(), amount);
+        UserPoint existingUserPoint = userPointTable.selectById(id);
+        long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
         UserPoint updatedUserPoint = userPointTable.insertOrUpdate(id, updatedPoints);
 
         return updatedUserPoint;
     }
 
-    public long updatePoints(long baseAmount,long chargeAmount) {
+    public UserPoint getPoint(long id) {
+        UserPoint existingUserPoint = userPointTable.selectById(id);
+        if (existingUserPoint == null) {
+            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ") 는 존재하지 않습니다.");
+        }
+        return existingUserPoint;
+    }
+
+    public UserPoint usePoints(long id, long amount) {
+        if (amount <= 0) {
+            throw new BaseException(ErrorCode.INVALID_OPERATION, "사용할 포인트는 0보다 커야 합니다.");
+        }
+        UserPoint existingUserPoint = userPointTable.selectById(id);
+        if (existingUserPoint == null) {
+            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ")는 존재하지 않습니다.");
+        }
+        if (existingUserPoint.point() < amount) {
+            throw new BaseException(ErrorCode.INSUFFICIENT_BALANCE, "사용할 포인트가 충분하지 않습니다.");
+        }
+
+        long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
+        return userPointTable.insertOrUpdate(id, updatedPointsTotal);
+    }
+
+    public long calculateIncreasedPoints(long baseAmount, long chargeAmount) {
         return baseAmount + chargeAmount;
     }
 
-    public UserPoint getPoint(long id) {
-        UserPoint userPoint = userPointTable.selectById(id);
-        if (userPoint == null) {
-            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ") 는 존재하지 않습니다.");
-        }
-        return userPoint;
+    public long calculateReducedPoints(long baseAmount, long chargeAmount) {
+        return baseAmount - chargeAmount;
     }
 }

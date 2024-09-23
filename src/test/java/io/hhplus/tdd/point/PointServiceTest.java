@@ -52,7 +52,7 @@ public class PointServiceTest {
     void test_update_Points() {
         long initialPoints = 100L;
         long chargeAmount = 50L;
-        long updatedPoints = pointService.updatePoints(initialPoints, chargeAmount);
+        long updatedPoints = pointService.calculateIncreasedPoints(initialPoints, chargeAmount);
         assertEquals(initialPoints + chargeAmount, updatedPoints);
     }
 
@@ -108,6 +108,49 @@ public class PointServiceTest {
 
         assertThrows(BaseException.class, () -> {
             pointService.getPoint(userId);
+        }, "해당 유저(" + userId + ")는 존재하지 않습니다.");
+    }
+
+    @Test
+    void test_use_points_userExistsAndSufficientBalance() {
+        long userId = 1L;
+        long initialPoints = 150L;
+        long useAmount = 50L;
+        UserPoint existingUserPoint = new UserPoint(userId, initialPoints, System.currentTimeMillis());
+        UserPoint updatedUserPoint = new UserPoint(userId, initialPoints - useAmount, System.currentTimeMillis());
+
+        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
+        when(userPointTable.insertOrUpdate(userId, initialPoints - useAmount)).thenReturn(updatedUserPoint);
+
+        UserPoint result = pointService.usePoints(userId, useAmount);
+
+        assertEquals(initialPoints - useAmount, result.point());
+        verify(userPointTable).insertOrUpdate(userId, initialPoints - useAmount);
+    }
+
+    @Test
+    void test_use_points_insufficientBalance() {
+        long userId = 1L;
+        long initialPoints = 30L;
+        long useAmount = 50L;
+        UserPoint existingUserPoint = new UserPoint(userId, initialPoints, System.currentTimeMillis());
+
+        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
+
+        assertThrows(BaseException.class, () -> {
+            pointService.usePoints(userId, useAmount);
+        }, "사용할 포인트가 충분하지 않습니다.");
+    }
+
+    @Test
+    void test_use_points_userNotFound() {
+        long userId = 999L;
+        long useAmount = 100L;
+
+        when(userPointTable.selectById(userId)).thenReturn(null);
+
+        assertThrows(BaseException.class, () -> {
+            pointService.usePoints(userId, useAmount);
         }, "해당 유저(" + userId + ")는 존재하지 않습니다.");
     }
 }
