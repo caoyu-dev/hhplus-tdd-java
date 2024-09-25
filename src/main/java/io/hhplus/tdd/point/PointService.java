@@ -1,6 +1,5 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.BaseException;
 import io.hhplus.tdd.ErrorCode;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
@@ -24,7 +23,7 @@ public class PointService {
 
     public UserPoint chargePoints(long id, long amount) {
         if (amount <= 0) {
-            throw new BaseException(ErrorCode.ADD_UNDER_VALUE_FAILED);
+            throw new IllegalArgumentException(ErrorCode.ADD_UNDER_VALUE_FAILED.getMessage());
         }
         UserPoint existingUserPoint = userPointTable.selectById(id);
         long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
@@ -37,21 +36,21 @@ public class PointService {
     public UserPoint getPoint(long id) {
         UserPoint existingUserPoint = userPointTable.selectById(id);
         if (existingUserPoint == null) {
-            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ") 는 존재하지 않습니다.");
+            throw new IllegalArgumentException("해당 유저(" + id + ") 는 존재하지 않습니다.");
         }
         return existingUserPoint;
     }
 
     public UserPoint usePoints(long id, long amount) {
         if (amount <= 0) {
-            throw new BaseException(ErrorCode.INVALID_OPERATION, "사용할 포인트는 0보다 커야 합니다.");
+            throw new IllegalArgumentException("사용할 포인트는 0보다 커야 합니다.");
         }
         UserPoint existingUserPoint = userPointTable.selectById(id);
         if (existingUserPoint == null) {
-            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ")는 존재하지 않습니다.");
+            throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
         }
         if (existingUserPoint.point() < amount) {
-            throw new BaseException(ErrorCode.INSUFFICIENT_BALANCE, "사용할 포인트가 충분하지 않습니다.");
+            throw new IllegalArgumentException("사용할 포인트가 충분하지 않습니다.");
         }
 
         long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
@@ -70,7 +69,7 @@ public class PointService {
     public List<PointHistory> getHistory(long id) {
         List<PointHistory> history = pointHistoryTable.selectAllByUserId(id);
         if (history.isEmpty()) {
-            throw new BaseException(ErrorCode.USER_NOT_FOUND, "해당 유저(" + id + ")의 트랜잭션 내역이 없습니다.");
+            throw new IllegalArgumentException("해당 유저(" + id + ")의 트랜잭션 내역이 없습니다.");
         }
         return history;
     }

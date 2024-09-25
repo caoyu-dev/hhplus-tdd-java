@@ -1,6 +1,5 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.BaseException;
 import io.hhplus.tdd.database.PointHistoryTable;
 import io.hhplus.tdd.database.UserPointTable;
 import org.junit.jupiter.api.BeforeEach;
@@ -9,7 +8,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.ArrayList;
@@ -41,7 +39,7 @@ public class PointServiceTest {
         long userId = 1L;
         long chargeAmount = 0L;
 
-        assertThrows(BaseException.class, () -> {
+        assertThrows(IllegalArgumentException.class, () -> {
             pointService.chargePoints(userId, chargeAmount);
         }, "포인트는 0보다 큰 값이어야 합니다.");
     }
@@ -51,7 +49,7 @@ public class PointServiceTest {
         long userId = 1L;
         long chargeAmount = -100L;
 
-        assertThrows(BaseException.class, () -> {
+        assertThrows(IllegalArgumentException.class, () -> {
             pointService.chargePoints(userId, chargeAmount);
         }, "포인트는 0보다 큰 값이어야 합니다.");
     }
@@ -114,7 +112,7 @@ public class PointServiceTest {
 
         when(userPointTable.selectById(userId)).thenReturn(null);
 
-        assertThrows(BaseException.class, () -> {
+        assertThrows(IllegalArgumentException.class, () -> {
             pointService.getPoint(userId);
         }, "해당 유저(" + userId + ")는 존재하지 않습니다.");
     }
@@ -130,9 +128,9 @@ public class PointServiceTest {
         when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
         when(userPointTable.insertOrUpdate(userId, initialPoints - useAmount)).thenReturn(updatedUserPoint);
 
-        UserPoint result = pointService.usePoints(userId, useAmount);
+        pointService.usePoints(userId, useAmount);
 
-        assertEquals(initialPoints - useAmount, result.point());
+        assertEquals(initialPoints - useAmount, updatedUserPoint.point());
         verify(userPointTable).insertOrUpdate(userId, initialPoints - useAmount);
     }
 
@@ -145,7 +143,7 @@ public class PointServiceTest {
 
         when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
 
-        assertThrows(BaseException.class, () -> {
+        assertThrows(IllegalArgumentException.class, () -> {
             pointService.usePoints(userId, useAmount);
         }, "사용할 포인트가 충분하지 않습니다.");
     }
@@ -157,7 +155,7 @@ public class PointServiceTest {
 
         when(userPointTable.selectById(userId)).thenReturn(null);
 
-        assertThrows(BaseException.class, () -> {
+        assertThrows(IllegalArgumentException.class, () -> {
             pointService.usePoints(userId, useAmount);
         }, "해당 유저(" + userId + ")는 존재하지 않습니다.");
     }
@@ -187,7 +185,7 @@ public class PointServiceTest {
 
         when(pointHistoryTable.selectAllByUserId(userId)).thenReturn(new ArrayList<>());
 
-        BaseException exception = assertThrows(BaseException.class, () -> {
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             pointService.getHistory(userId);
         });
 

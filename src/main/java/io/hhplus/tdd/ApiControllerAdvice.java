@@ -8,16 +8,9 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 
 @RestControllerAdvice
 class ApiControllerAdvice extends ResponseEntityExceptionHandler {
-    @ExceptionHandler(value = BaseException.class)
-    public ResponseEntity<?> handleInvalidAmountException(BaseException e) {
-        int status = 500;
-
-        if (e instanceof BaseException) {
-            BaseException be = (BaseException) e;
-            status = be.getErrorCode().getStatus();
-        }
-
-        return getResponseEntity(status, e.getMessage(), HttpStatus.valueOf(status));
+    @ExceptionHandler(value = IllegalArgumentException.class)
+    public ResponseEntity<?> handleInvalidAmountException(IllegalArgumentException e) {
+        return getResponseEntity(400, e.getMessage(), HttpStatus.valueOf(400));
     }
 
     @ExceptionHandler(value = Exception.class)
