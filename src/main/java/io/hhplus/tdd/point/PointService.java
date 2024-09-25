@@ -8,54 +8,67 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 
 @Service
 public class PointService {
 
     private final UserPointTable userPointTable;
     private final PointHistoryTable pointHistoryTable;
+    private final ExecutorService executor;
     private static final Logger log = LoggerFactory.getLogger(PointService.class);
 
-    public PointService(UserPointTable userPointTable, PointHistoryTable pointHistoryTable) {
+    public PointService(UserPointTable userPointTable,
+                        PointHistoryTable pointHistoryTable,
+                        ExecutorService executor)
+    {
         this.userPointTable = userPointTable;
         this.pointHistoryTable = pointHistoryTable;
+        this.executor = executor;
     }
 
-    public UserPoint chargePoints(long id, long amount) {
-        if (amount <= 0) {
-            throw new IllegalArgumentException(ErrorCode.ADD_UNDER_VALUE_FAILED.getMessage());
-        }
-        UserPoint existingUserPoint = userPointTable.selectById(id);
-        long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
-        UserPoint updatedUserPoint = userPointTable.insertOrUpdate(id, updatedPoints);
+    public CompletableFuture<UserPoint> chargePoints(long id, long amount) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (amount <= 0) {
+                throw new IllegalArgumentException(ErrorCode.ADD_UNDER_VALUE_FAILED.getMessage());
+            }
+            UserPoint existingUserPoint = userPointTable.selectById(id);
+            long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
+            UserPoint updatedUserPoint = userPointTable.insertOrUpdate(id, updatedPoints);
 
-        recordTransaction(id, amount, TransactionType.CHARGE);
-        return updatedUserPoint;
+            recordTransaction(id, amount, TransactionType.CHARGE);
+            return updatedUserPoint;
+        }, executor);
     }
 
-    public UserPoint getPoint(long id) {
-        UserPoint existingUserPoint = userPointTable.selectById(id);
-        if (existingUserPoint == null) {
-            throw new IllegalArgumentException("해당 유저(" + id + ") 는 존재하지 않습니다.");
-        }
-        return existingUserPoint;
+    public CompletableFuture<UserPoint> getPoint(long id) {
+        return CompletableFuture.supplyAsync(() -> {
+            UserPoint existingUserPoint = userPointTable.selectById(id);
+            if (existingUserPoint == null) {
+                throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
+            }
+            return existingUserPoint;
+        }, executor);
     }
 
-    public UserPoint usePoints(long id, long amount) {
-        if (amount <= 0) {
-            throw new IllegalArgumentException("사용할 포인트는 0보다 커야 합니다.");
-        }
-        UserPoint existingUserPoint = userPointTable.selectById(id);
-        if (existingUserPoint == null) {
-            throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
-        }
-        if (existingUserPoint.point() < amount) {
-            throw new IllegalArgumentException("사용할 포인트가 충분하지 않습니다.");
-        }
+    public CompletableFuture<UserPoint> usePoints(long id, long amount) {
+        return CompletableFuture.supplyAsync(() -> {
+            if (amount <= 0) {
+                throw new IllegalArgumentException(ErrorCode.INVALID_OPERATION.getMessage());
+            }
+            UserPoint existingUserPoint = userPointTable.selectById(id);
+            if (existingUserPoint == null) {
+                throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
+            }
+            if (existingUserPoint.point() < amount) {
+                throw new IllegalArgumentException(ErrorCode.INSUFFICIENT_BALANCE.getMessage());
+            }
 
-        long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
-        recordTransaction(id, amount, TransactionType.USE);
-        return userPointTable.insertOrUpdate(id, updatedPointsTotal);
+            long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
+            recordTransaction(id, amount, TransactionType.USE);
+            return userPointTable.insertOrUpdate(id, updatedPointsTotal);
+        }, executor);
     }
 
     public long calculateIncreasedPoints(long baseAmount, long chargeAmount) {

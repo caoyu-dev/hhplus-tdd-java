@@ -5,6 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.concurrent.CompletableFuture;
+
 @RestController
 @RequestMapping("/point")
 public class PointController {
@@ -41,21 +43,23 @@ public class PointController {
      * TODO - 특정 유저의 포인트를 충전하는 기능을 작성해주세요.
      */
     @PatchMapping("{id}/charge")
-    public ResponseEntity<?> charge(
+    public CompletableFuture<ResponseEntity<?>> charge(
             @PathVariable long id,
             @RequestBody long amount
     ) {
-        return ResponseEntity.ok().body(pointService.chargePoints(id, amount));
+        return pointService.chargePoints(id, amount)
+                .thenApply(updatedUserPoint -> ResponseEntity.ok().body(updatedUserPoint));
     }
 
     /**
      * TODO - 특정 유저의 포인트를 사용하는 기능을 작성해주세요.
      */
     @PatchMapping("{id}/use")
-    public ResponseEntity<?> use(
+    public CompletableFuture<ResponseEntity<?>> use(
             @PathVariable long id,
             @RequestBody long amount
     ) {
-        return ResponseEntity.ok().body(pointService.usePoints(id, amount));
+        return pointService.usePoints(id, amount)
+                .thenApply(updatedUserPoint -> ResponseEntity.ok().body(updatedUserPoint));
     }
 }
