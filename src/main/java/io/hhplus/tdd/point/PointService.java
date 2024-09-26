@@ -10,13 +10,17 @@ import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 @Service
 public class PointService {
 
+    private static final long MAXIMUM_POINT_LIMIT = 50000L;
     private final UserPointTable userPointTable;
     private final PointHistoryTable pointHistoryTable;
     private final ExecutorService executor;
+    private final Lock lock = new ReentrantLock(); // 순차적으로 처리
     private static final Logger log = LoggerFactory.getLogger(PointService.class);
 
     public PointService(UserPointTable userPointTable,
@@ -30,15 +34,24 @@ public class PointService {
 
     public CompletableFuture<UserPoint> chargePoints(long id, long amount) {
         return CompletableFuture.supplyAsync(() -> {
-            if (amount <= 0) {
-                throw new IllegalArgumentException(ErrorCode.ADD_UNDER_VALUE_FAILED.getMessage());
-            }
-            UserPoint existingUserPoint = userPointTable.selectById(id);
-            long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
-            UserPoint updatedUserPoint = userPointTable.insertOrUpdate(id, updatedPoints);
+            lock.lock(); // 작업 시작할 때 lock 걸고
+            try {
+                if (amount <= 0) {
+                    throw new IllegalArgumentException(ErrorCode.ADD_UNDER_VALUE_FAILED.getMessage());
+                }
+                UserPoint existingUserPoint = userPointTable.selectById(id);
+                long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
 
-            recordTransaction(id, amount, TransactionType.CHARGE);
-            return updatedUserPoint;
+                if (updatedPoints > MAXIMUM_POINT_LIMIT) {
+                    throw new IllegalArgumentException("최대 50000 포인트까지 모을 수 있습니다.");
+                }
+
+                UserPoint updatedUserPoint = userPointTable.insertOrUpdate(id, updatedPoints);
+                recordTransaction(id, amount, TransactionType.CHARGE);
+                return updatedUserPoint;
+            } finally {
+                lock.unlock();  // 작업 완료 후 lock 빼기
+            }
         }, executor);
     }
 
@@ -54,20 +67,25 @@ public class PointService {
 
     public CompletableFuture<UserPoint> usePoints(long id, long amount) {
         return CompletableFuture.supplyAsync(() -> {
-            if (amount <= 0) {
-                throw new IllegalArgumentException(ErrorCode.INVALID_OPERATION.getMessage());
-            }
-            UserPoint existingUserPoint = userPointTable.selectById(id);
-            if (existingUserPoint == null) {
-                throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
-            }
-            if (existingUserPoint.point() < amount) {
-                throw new IllegalArgumentException(ErrorCode.INSUFFICIENT_BALANCE.getMessage());
-            }
+            lock.lock();
+            try {
+                if (amount <= 0) {
+                    throw new IllegalArgumentException(ErrorCode.INVALID_OPERATION.getMessage());
+                }
+                UserPoint existingUserPoint = userPointTable.selectById(id);
+                if (existingUserPoint == null) {
+                    throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
+                }
+                if (existingUserPoint.point() < amount) {
+                    throw new IllegalArgumentException(ErrorCode.INSUFFICIENT_BALANCE.getMessage());
+                }
 
-            long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
-            recordTransaction(id, amount, TransactionType.USE);
-            return userPointTable.insertOrUpdate(id, updatedPointsTotal);
+                long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
+                recordTransaction(id, amount, TransactionType.USE);
+                return userPointTable.insertOrUpdate(id, updatedPointsTotal);
+            } finally {
+                lock.unlock();
+            }
         }, executor);
     }
 
