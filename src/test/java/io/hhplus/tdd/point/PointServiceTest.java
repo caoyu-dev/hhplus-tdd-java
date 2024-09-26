@@ -1,7 +1,6 @@
 package io.hhplus.tdd.point;
 
-import io.hhplus.tdd.database.PointHistoryTable;
-import io.hhplus.tdd.database.UserPointTable;
+import io.hhplus.tdd.point.dto.PointRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,10 +25,10 @@ import static org.mockito.Mockito.when;
 public class PointServiceTest {
 
     @Mock
-    private UserPointTable userPointTable;
+    private PointRepository pointRepository;
 
     @Mock
-    private PointHistoryTable pointHistoryTable;
+    private HistoryRepository historyRepository;
 
     private ExecutorService executor;
 
@@ -39,15 +38,17 @@ public class PointServiceTest {
     @BeforeEach
     void setUp() {
         executor = Executors.newFixedThreadPool(1);
-        pointService = new PointService(userPointTable, pointHistoryTable, executor);
-        Mockito.reset(userPointTable, pointHistoryTable);
+        pointService = new PointService(pointRepository, historyRepository, executor);
+        Mockito.reset(pointRepository, historyRepository);
     }
 
     @Test
     void test_add_0_point_userExists() {
         long userId = 1L;
         long chargeAmount = 0L;
-        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, chargeAmount);
+
+        PointRequest request = new PointRequest(chargeAmount);
+        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, request);
 
         CompletionException exception = assertThrows(CompletionException.class, future::join);
         assertTrue(exception.getCause() instanceof IllegalArgumentException);
@@ -58,7 +59,9 @@ public class PointServiceTest {
     void test_add_minus_point_userExists() {
         long userId = 1L;
         long chargeAmount = -100L;
-        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, chargeAmount);
+
+        PointRequest request = new PointRequest(chargeAmount);
+        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, request);
 
         CompletionException exception = assertThrows(CompletionException.class, future::join);
         assertTrue(exception.getCause() instanceof IllegalArgumentException);
@@ -82,14 +85,16 @@ public class PointServiceTest {
         UserPoint existingUserPoint = new UserPoint(userId, initialPoints, System.currentTimeMillis());
         UserPoint updatedUserPoint = new UserPoint(userId, initialPoints + chargeAmount, System.currentTimeMillis());
 
-        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
-        when(userPointTable.insertOrUpdate(userId, initialPoints + chargeAmount)).thenReturn(updatedUserPoint);
+        PointRequest request = new PointRequest(chargeAmount);
 
-        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, chargeAmount);
+        when(pointRepository.findByUserId(userId)).thenReturn(existingUserPoint);
+        when(pointRepository.addPoint(userId, initialPoints + chargeAmount)).thenReturn(updatedUserPoint);
+
+        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, request);
         UserPoint result = future.join();
 
         assertEquals(initialPoints + chargeAmount, result.point());
-        verify(userPointTable).insertOrUpdate(userId, initialPoints + chargeAmount);
+        verify(pointRepository).addPoint(userId, initialPoints + chargeAmount);
     }
 
     @Test
@@ -98,14 +103,16 @@ public class PointServiceTest {
         long chargeAmount = 100L;
         UserPoint newPoint = new UserPoint(userId, chargeAmount, System.currentTimeMillis());
 
-        when(userPointTable.selectById(userId)).thenReturn(UserPoint.empty(userId));
-        when(userPointTable.insertOrUpdate(userId, chargeAmount)).thenReturn(newPoint);
+        PointRequest request = new PointRequest(chargeAmount);
 
-        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, chargeAmount);
+        when(pointRepository.findByUserId(userId)).thenReturn(UserPoint.empty(userId));
+        when(pointRepository.addPoint(userId, chargeAmount)).thenReturn(newPoint);
+
+        CompletableFuture<UserPoint> future = pointService.chargePoints(userId, request);
         UserPoint result = future.join();
 
         assertEquals(chargeAmount, result.point());
-        verify(userPointTable).insertOrUpdate(userId, chargeAmount);
+        verify(pointRepository).addPoint(userId, chargeAmount);
     }
 
     @Test
@@ -113,26 +120,25 @@ public class PointServiceTest {
         long userId = 1L;
         UserPoint existingUserPoint = new UserPoint(userId, 100L, System.currentTimeMillis());
 
-        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
+        when(pointRepository.findByUserId(userId)).thenReturn(existingUserPoint);
 
-        CompletableFuture<UserPoint> future = pointService.getPoint(userId);
-        UserPoint result = future.join();
+        UserPoint result = pointService.getPoint(userId);
 
         assertNotNull(result);
         assertEquals(100L, result.point());
-        verify(userPointTable).selectById(userId);
+        verify(pointRepository).findByUserId(userId);
     }
 
     @Test
     void test_get_point_userNotFound() {
         long userId = 999L;
 
-        when(userPointTable.selectById(userId)).thenReturn(null);
-        CompletableFuture<UserPoint> future = pointService.getPoint(userId);
+        when(pointRepository.findByUserId(userId)).thenReturn(null);
+        IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
+            pointService.getPoint(userId);
+        });
 
-        CompletionException exception = assertThrows(CompletionException.class, future::join);
-        assertTrue(exception.getCause() instanceof  IllegalArgumentException);
-        assertEquals("해당 유저(" + userId + ")는 존재하지 않습니다.", exception.getCause().getMessage());
+        assertEquals("해당 유저(" + userId + ")는 존재하지 않습니다.", exception.getMessage());
     }
 
     @Test
@@ -143,14 +149,16 @@ public class PointServiceTest {
         UserPoint existingUserPoint = new UserPoint(userId, initialPoints, System.currentTimeMillis());
         UserPoint updatedUserPoint = new UserPoint(userId, initialPoints - useAmount, System.currentTimeMillis());
 
-        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
-        when(userPointTable.insertOrUpdate(userId, initialPoints - useAmount)).thenReturn(updatedUserPoint);
+        PointRequest request = new PointRequest(useAmount);
 
-        CompletableFuture<UserPoint> future = pointService.usePoints(userId, useAmount);
+        when(pointRepository.findByUserId(userId)).thenReturn(existingUserPoint);
+        when(pointRepository.addPoint(userId, initialPoints - useAmount)).thenReturn(updatedUserPoint);
+
+        CompletableFuture<UserPoint> future = pointService.usePoints(userId, request);
         UserPoint result = future.join();
 
         assertEquals(initialPoints - useAmount, result.point());
-        verify(userPointTable).insertOrUpdate(userId, initialPoints - useAmount);
+        verify(pointRepository).addPoint(userId, initialPoints - useAmount);
     }
 
     @Test
@@ -160,8 +168,10 @@ public class PointServiceTest {
         long useAmount = 50L;
         UserPoint existingUserPoint = new UserPoint(userId, initialPoints, System.currentTimeMillis());
 
-        when(userPointTable.selectById(userId)).thenReturn(existingUserPoint);
-        CompletableFuture<UserPoint> future = pointService.usePoints(userId, useAmount);
+        PointRequest request = new PointRequest(useAmount);
+
+        when(pointRepository.findByUserId(userId)).thenReturn(existingUserPoint);
+        CompletableFuture<UserPoint> future = pointService.usePoints(userId, request);
 
         CompletionException exception = assertThrows(CompletionException.class, future::join);
         assertTrue(exception.getCause() instanceof IllegalArgumentException);
@@ -172,9 +182,10 @@ public class PointServiceTest {
     void test_use_points_userNotFound() {
         long userId = 999L;
         long useAmount = 100L;
+        PointRequest request = new PointRequest(useAmount);
 
-        when(userPointTable.selectById(userId)).thenReturn(null);
-        CompletableFuture<UserPoint> future = pointService.usePoints(userId, useAmount);
+        when(pointRepository.findByUserId(userId)).thenReturn(null);
+        CompletableFuture<UserPoint> future = pointService.usePoints(userId, request);
 
         CompletionException exception = assertThrows(CompletionException.class, future::join);
         assertTrue(exception.getCause() instanceof IllegalArgumentException);
@@ -188,7 +199,7 @@ public class PointServiceTest {
         historyList.add(new PointHistory(1L, userId, 100L, TransactionType.CHARGE, System.currentTimeMillis()));
         historyList.add(new PointHistory(2L, userId, 50L, TransactionType.USE, System.currentTimeMillis()));
 
-        when(pointHistoryTable.selectAllByUserId(userId)).thenReturn(historyList);
+        when(historyRepository.selectAllByUserId(userId)).thenReturn(historyList);
 
         List<PointHistory> result = pointService.getHistory(userId);
 
@@ -197,20 +208,20 @@ public class PointServiceTest {
         assertEquals(TransactionType.CHARGE, result.get(0).type());
         assertEquals(TransactionType.USE, result.get(1).type());
 
-        verify(pointHistoryTable).selectAllByUserId(userId);
+        verify(historyRepository).selectAllByUserId(userId);
     }
 
     @Test
     void test_get_history_userHasNoHistory() {
         long userId = 1L;
 
-        when(pointHistoryTable.selectAllByUserId(userId)).thenReturn(new ArrayList<>());
+        when(historyRepository.selectAllByUserId(userId)).thenReturn(new ArrayList<>());
 
         IllegalArgumentException exception = assertThrows(IllegalArgumentException.class, () -> {
             pointService.getHistory(userId);
         });
 
         assertEquals("해당 유저(" + userId + ")의 트랜잭션 내역이 없습니다.", exception.getMessage());
-        verify(pointHistoryTable).selectAllByUserId(userId);
+        verify(historyRepository).selectAllByUserId(userId);
     }
 }
