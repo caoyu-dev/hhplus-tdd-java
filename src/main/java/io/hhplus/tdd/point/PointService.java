@@ -1,8 +1,7 @@
 package io.hhplus.tdd.point;
 
 import io.hhplus.tdd.ErrorCode;
-import io.hhplus.tdd.database.PointHistoryTable;
-import io.hhplus.tdd.database.UserPointTable;
+import io.hhplus.tdd.point.dto.PointRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,36 +16,38 @@ import java.util.concurrent.locks.ReentrantLock;
 public class PointService {
 
     private static final long MAXIMUM_POINT_LIMIT = 50000L;
-    private final UserPointTable userPointTable;
-    private final PointHistoryTable pointHistoryTable;
+    private final PointRepository pointRepository;
+    private final HistoryRepository historyRepository;
     private final ExecutorService executor;
     private final Lock lock = new ReentrantLock(); // 순차적으로 처리
     private static final Logger log = LoggerFactory.getLogger(PointService.class);
 
-    public PointService(UserPointTable userPointTable,
-                        PointHistoryTable pointHistoryTable,
+    public PointService(PointRepository pointRepository,
+                        HistoryRepository historyRepository,
                         ExecutorService executor)
     {
-        this.userPointTable = userPointTable;
-        this.pointHistoryTable = pointHistoryTable;
+        this.pointRepository = pointRepository;
+        this.historyRepository = historyRepository;
         this.executor = executor;
     }
 
-    public CompletableFuture<UserPoint> chargePoints(long id, long amount) {
+    public CompletableFuture<UserPoint> chargePoints(long id, PointRequest request) {
         return CompletableFuture.supplyAsync(() -> {
             lock.lock(); // 작업 시작할 때 lock 걸고
             try {
+                long amount = request.getAmount();
+
                 if (amount <= 0) {
                     throw new IllegalArgumentException(ErrorCode.ADD_UNDER_VALUE_FAILED.getMessage());
                 }
-                UserPoint existingUserPoint = userPointTable.selectById(id);
+                UserPoint existingUserPoint = pointRepository.findByUserId(id);
                 long updatedPoints = calculateIncreasedPoints(existingUserPoint.point(), amount);
 
                 if (updatedPoints > MAXIMUM_POINT_LIMIT) {
                     throw new IllegalArgumentException("최대 50000 포인트까지 모을 수 있습니다.");
                 }
 
-                UserPoint updatedUserPoint = userPointTable.insertOrUpdate(id, updatedPoints);
+                UserPoint updatedUserPoint = pointRepository.addPoint(id, updatedPoints);
                 recordTransaction(id, amount, TransactionType.CHARGE);
                 return updatedUserPoint;
             } finally {
@@ -55,24 +56,24 @@ public class PointService {
         }, executor);
     }
 
-    public CompletableFuture<UserPoint> getPoint(long id) {
-        return CompletableFuture.supplyAsync(() -> {
-            UserPoint existingUserPoint = userPointTable.selectById(id);
-            if (existingUserPoint == null) {
-                throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
-            }
-            return existingUserPoint;
-        }, executor);
+    public UserPoint getPoint(long id) {
+        UserPoint existingUserPoint = pointRepository.findByUserId(id);
+        if (existingUserPoint == null) {
+            throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
+        }
+        return existingUserPoint;
     }
 
-    public CompletableFuture<UserPoint> usePoints(long id, long amount) {
+    public CompletableFuture<UserPoint> usePoints(long id, PointRequest request) {
         return CompletableFuture.supplyAsync(() -> {
             lock.lock();
             try {
+                long amount = request.getAmount();
+
                 if (amount <= 0) {
                     throw new IllegalArgumentException(ErrorCode.INVALID_OPERATION.getMessage());
                 }
-                UserPoint existingUserPoint = userPointTable.selectById(id);
+                UserPoint existingUserPoint = pointRepository.findByUserId(id);
                 if (existingUserPoint == null) {
                     throw new IllegalArgumentException("해당 유저(" + id + ")는 존재하지 않습니다.");
                 }
@@ -82,7 +83,7 @@ public class PointService {
 
                 long updatedPointsTotal = calculateReducedPoints(existingUserPoint.point(), amount);
                 recordTransaction(id, amount, TransactionType.USE);
-                return userPointTable.insertOrUpdate(id, updatedPointsTotal);
+                return pointRepository.addPoint(id, updatedPointsTotal);
             } finally {
                 lock.unlock();
             }
@@ -98,7 +99,7 @@ public class PointService {
     }
 
     public List<PointHistory> getHistory(long id) {
-        List<PointHistory> history = pointHistoryTable.selectAllByUserId(id);
+        List<PointHistory> history = historyRepository.selectAllByUserId(id);
         if (history.isEmpty()) {
             throw new IllegalArgumentException("해당 유저(" + id + ")의 트랜잭션 내역이 없습니다.");
         }
@@ -107,6 +108,6 @@ public class PointService {
 
     public void recordTransaction(long userId, long amount, TransactionType type) {
         long updateMillis = System.currentTimeMillis();
-        pointHistoryTable.insert(userId, amount, type, updateMillis);
+        historyRepository.addHistory(userId, amount, type, updateMillis);
     }
 }
